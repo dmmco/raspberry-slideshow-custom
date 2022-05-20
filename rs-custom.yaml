@@ -1,0 +1,41 @@
+---
+- name: raspberry slideshow custom playbook
+  hosts: all
+  become: yes
+
+  tasks:
+  - name: install cec-utils
+    ansible.builtin.package:
+      name: cec-utils
+      state: latest
+
+  - name: create script directory
+    ansible.builtin.file:
+      path: /script
+      state: directory
+
+  - name: copy tv-power script
+    ansible.builtin.copy:
+      src: scripts/tv-power.sh
+      dest: /script/tv-power.sh
+
+  - name: tv power cron
+    ansible.builtin.cron:
+      name: "check tv power"
+      minute: "*/5"
+      job: "bash /script/tv-power.sh >> /var/log/tvpower.txt"
+      
+#  - name: insert dropbox path into system.sh
+#    ansible.builtin.replace:
+#      path: /usr/lib/rs/class/System.sh
+#      after: 'dropbox_uploader.sh download '
+#      before: '| tee -a $LOGFILE'
+#      regexp: '^(.+)$'
+#      replace: '/MCO-DISPLAY-IMAGES'
+
+  - name: replace debugged dropbox download comnnand in system.sh
+    ansible.builtin.replace:
+      path: /usr/lib/rs/class/System.sh
+      regexp: '                        dropbox_uploader.sh download /'
+      replace: '                        dropbox_uploader.sh download /MCO-DISPLAY-IMAGES'
+      backup: yes

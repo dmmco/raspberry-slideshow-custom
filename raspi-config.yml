@@ -1,0 +1,110 @@
+---
+- hosts: all
+  remote_user: pi
+  become: True
+  gather_facts: True
+  
+  vars:
+    REBOOT: True
+    UPDATE: True
+    HOSTNAME: "raspberry-slideshow"
+    LOCALE: "en_US.UTF-8"
+    TIMEZONE: "America/Chicago"
+    XKBLAYOUT: "us" #default "gb"
+    OVERSCAN: False
+
+  tasks:
+#Update
+    - name: Update raspi-config itself
+      become: true
+      apt: name=raspi-config update_cache=yes state=present cache_valid_time=3600
+      when: UPDATE == True
+
+#Get some basic info
+    - name: Get Raspberry Pi type
+      shell: "raspi-config nonint get_pi_type"
+      register: pi_type
+      changed_when: False
+
+    - name: Show pi version
+      debug:
+        msg: "Pi version: {{ pi_type.stdout }}"
+
+#2 Network Options
+
+    #N1 Hostname
+    - name: Get hostname
+      shell: "raspi-config nonint get_hostname"
+      register: pi_hostname
+      changed_when: False
+
+    - name: Print current hostname
+      debug:
+        msg: "Current hostname: {{ pi_hostname.stdout }}"
+
+    - name: Change hostname
+      shell: "raspi-config nonint do_hostname {{ HOSTNAME }}"
+      when: pi_hostname.stdout != HOSTNAME
+
+
+#4 Localisation Options
+
+    #I1 Change Locale
+    - name: Change locale
+      shell: "raspi-config nonint do_change_locale {{ LOCALE }}"
+
+    #I2 Change Timezone
+    - name: Change timezone
+      shell: "raspi-config nonint do_change_timezone {{ TIMEZONE }}"
+
+    #I3 Change Keyboard Layout
+    - name: Change keyboard layout
+      shell: "raspi-config nonint do_configure_keyboard {{ XKBLAYOUT }}"
+
+#7 Advanced Options 
+
+    #A1 Expand Filesystem
+    - name: Check if FS is expandable
+      shell: "raspi-config nonint get_can_expand"
+      register: fs_filled
+      changed_when: False
+
+    - name: Print if FS is expandable or not
+      debug:
+        msg: "Filesystem is expandable! [{{ fs_filled.stdout }}]"
+      when: fs_filled.stdout == '0'
+
+    - name: Expand Filesystem
+      shell: "raspi-config nonint do_expand_rootfs"
+
+    #A2 Overscan
+    - name: Get Overscan status
+      shell: "raspi-config nonint get_overscan"
+      register: pi_overscan
+      changed_when: False
+
+    - name: Print Overscan
+      debug: 
+        msg: "Boot overscan is: {{ pi_overscan.stdout }}"
+
+    - name: Enable Overscan
+      shell: "raspi-config nonint do_overscan {{ OVERSCAN }}"
+      when: OVERSCAN == True
+
+  
+#REBOOT
+    - name: Reboot
+      become: True
+      shell: "sleep 1 && shutdown -r now +1"
+      async: 1
+      poll: 0
+      notify:
+        - wait-for-reboot
+      when: REBOOT == True
+
+  #HANDLERS
+  handlers:
+    - name: wait-for-reboot
+      wait_for_connection:
+        delay: "5"
+        timeout: "300"
